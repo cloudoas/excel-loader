@@ -1,0 +1,13 @@
+{
+	"Employee":{
+		"name":"Name",
+		"email":"Email",
+		"dob":"Date of Birth",
+		"salary":"Salary",
+		"department":"Department"
+	},
+	"Department":{
+		"name":"Name",
+		"budget":"Budget"
+	}
+}

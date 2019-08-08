@@ -1,70 +1,65 @@
 package io.github.cloudoas.excelloader;
 
 import java.io.File;
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
 
-import org.apache.commons.compress.archivers.dump.InvalidFormatException;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.DateUtil;
+import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-/**
- * Created by rajeevkumarsingh on 18/12/17.
- */
+import io.github.cloudoas.excelloader.mapper.RowMapper;
 
 public class ExcelReader {
-    public static final String SAMPLE_XLSX_FILE_PATH = "./src/test/resources/sample-xlsx-file.xlsx";
-
-    public static void main(String[] args) throws IOException, InvalidFormatException {
-        // Creating a Workbook from an Excel file (.xls or .xlsx)
-        Workbook workbook = WorkbookFactory.create(new File(SAMPLE_XLSX_FILE_PATH));
-
-        // Retrieving the number of sheets in the Workbook
-        System.out.println("Workbook has " + workbook.getNumberOfSheets() + " Sheets : ");
-
-        System.out.println("Retrieving Sheets using for-each loop");
-        for(Sheet sheet: workbook) {
-            System.out.println("=> " + sheet.getSheetName());
-        }
-
-
-        // Getting the Sheet at index zero
-        Sheet sheet = workbook.getSheetAt(0);
-
-        System.out.println("\n\nIterating over Rows and Columns using Java 8 forEach with lambda\n");
-        sheet.forEach(row -> {
-            row.forEach(cell -> {
-            	System.out.print(getCellValue(cell)+"\t");
-            });
-            System.out.println();
-        });
-
-        // Closing the workbook
-        workbook.close();
-    }
-
-    private static Object getCellValue(Cell cell) {
-        switch (cell.getCellType()) {
-            case BOOLEAN:
-                return cell.getBooleanCellValue();
-            case STRING:
-                return cell.getRichStringCellValue().getString();
-            case NUMERIC:
-                if (DateUtil.isCellDateFormatted(cell)) {
-                    return cell.getDateCellValue();
-                } else {
-                    return cell.getNumericCellValue();
-                }
-            case FORMULA:
-                return cell.getCellFormula();
-            case BLANK:
-                break;
-            default:
-        }
-        
-        return StringUtils.EMPTY;
-    }
+	private static final Logger logger = LoggerFactory.getLogger(ExcelReader.class);
+	
+	public <T> Collection<T> readObjects(File excelFile, int sheetIndex, Class<T> dataType) throws Exception{
+		Workbook workbook = WorkbookFactory.create(excelFile);
+		
+		Sheet sheet = workbook.getSheetAt(sheetIndex);
+		
+		if (null==sheet) {
+			logger.error("cannot find sheet at index: " + sheetIndex);
+			return Collections.<T>emptyList();
+		}
+		
+		RowMapper rowMapper = RowMapper.DEFAULT;
+		
+		List<T> results = new ArrayList<>();
+		List<String> columnHeaders = new ArrayList<>();
+		
+		Iterator<Row> rowItr = sheet.rowIterator();
+		
+		if (!rowItr.hasNext()) {
+			logger.error("no rows found in sheet at index: " + sheetIndex);
+			return Collections.<T>emptyList();		
+		}
+		
+		Row firstRow = rowItr.next();
+		
+		firstRow.forEach(cell->{
+			Object cellValue = RowMapper.getCellValue(cell);
+			
+			if (null!=cellValue) {
+				columnHeaders.add(cellValue.toString().toLowerCase());
+			}
+		});
+		
+		
+		while (rowItr.hasNext()) {
+			Row row = rowItr.next();
+			
+			T bean = rowMapper.map(row, dataType, columnHeaders);
+			
+			results.add(bean);
+		}
+		
+		return results;
+	}
 }

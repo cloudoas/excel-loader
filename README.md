@@ -1,3 +1,3 @@
 # excel-loader
 
-load excel file to DB
+load excel file to Java POJOs(Plain Old Java Objects) 
