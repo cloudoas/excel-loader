@@ -17,12 +17,14 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+@SuppressWarnings("rawtypes")
 public class RowMapper {
 	private static final String CONFIG_NAME="mappings.json";
 	private static final Logger logger = LoggerFactory.getLogger(RowMapper.class);
 	private static final ObjectMapper objectMapper = new ObjectMapper();
 	
 	private Map<String, Map<String, String>> mappings = new HashMap<>();
+	private Map<Class, Converter> converters = new HashMap<>();
 	
 	public static final RowMapper DEFAULT = new RowMapper().init();
 	
@@ -46,9 +48,16 @@ public class RowMapper {
 			logger.error(e.getMessage(), e);
 		}
 		
+		converters.put(Integer.class, new IntegerConverter());
+		
 		return this;
 	}
+	
+	public void registerConverter(Class type, Converter converter) {
+		converters.put(type, converter);
+	}
 
+	@SuppressWarnings("unchecked")
 	public <T> T map(Row row, Class<T> type, List<String> columnHeaders) {
 		if (type.isInterface()) {
 			throw new IllegalArgumentException("Cannot map rows to interfaces.");
@@ -98,10 +107,18 @@ public class RowMapper {
 				}else if (field.getType().isAssignableFrom(String.class)) {
 					setter.invoke(bean, cellValue.toString());
 				}else {
-					throw new UnsupportedOperationException(String.format("Cannot set value with type %s to the field %s with type %s", 
-							cellValue.getClass().getCanonicalName(),
-							fieldName,
-							field.getType().getCanonicalName()));
+					Converter converter = converters.get(field.getType());
+					
+					if (null!=converter) {
+						Object convertedValue = converter.convert(cellValue);
+						
+						setter.invoke(bean, convertedValue);
+					}else {
+						throw new UnsupportedOperationException(String.format("Cannot set value with type %s to the field %s with type %s", 
+								cellValue.getClass().getCanonicalName(),
+								fieldName,
+								field.getType().getCanonicalName()));
+					}
 				}
 			}
 			
